@@ -60,12 +60,12 @@ func handleConnection(conn net.Conn) error {
 		return err
 	}
 	// 请求
-	if _, err := request(conn); err != nil {
+	targetConn, err := request(conn)
+	if err != nil {
 		return err
 	}
 	// 转发
-
-	return nil
+	return forward(conn, targetConn)
 }
 
 /**
@@ -121,4 +121,17 @@ func request(conn io.ReadWriter) (io.ReadWriteCloser, error) {
 	addrValue := targetConn.LocalAddr()
 	addr := addrValue.(*net.TCPAddr)
 	return targetConn, WriteRequestSuccessMessage(conn, addr.IP, uint16(addr.Port))
+}
+
+/**
+转发过程
+*/
+func forward(conn io.ReadWriter, targetConn io.ReadWriteCloser) error {
+	defer targetConn.Close()
+
+	go func() {
+		io.Copy(targetConn, conn)
+	}()
+	_, err := io.Copy(conn, targetConn)
+	return err
 }
