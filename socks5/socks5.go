@@ -9,11 +9,12 @@ import (
 )
 
 var (
-	ErrMethodNotSupport     = errors.New("method not supported")
-	ErrVersionNotSupported  = errors.New("protocol version not supported")
-	ErrCommandNotSupported  = errors.New("command not supported")
-	ErrInvalidReservedField = errors.New("invalid reserved field")
-	ErrAddressTypeSupported = errors.New("address type not supported")
+	ErrMethodNotSupport          = errors.New("method not supported")
+	ErrVersionNotSupported       = errors.New("protocol version not supported")
+	ErrMethodVersionNotSupported = errors.New("sub-negotiation method version not supported")
+	ErrCommandNotSupported       = errors.New("command not supported")
+	ErrInvalidReservedField      = errors.New("invalid reserved field")
+	ErrAddressTypeSupported      = errors.New("address type not supported")
 )
 
 const (
@@ -26,11 +27,29 @@ type Server interface {
 }
 
 type SOCKS5Server struct {
-	IP   string
-	Port int
+	IP     string
+	Port   int
+	Config *Config
+}
+
+type Config struct {
+	AuthMethod      Method
+	PasswordChecker func(username, password string) bool
+}
+
+func initConfig(config *Config) error {
+	if config.AuthMethod == MethodPassword && config.PasswordChecker == nil {
+		return ErrPasswordCheckerNotSet
+	}
+	return nil
 }
 
 func (s *SOCKS5Server) Run() error {
+	// Check for Server Config
+	err := initConfig(s.Config)
+	if err != nil {
+		return err
+	}
 	address := fmt.Sprintf("%s:%d", s.IP, s.Port)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -46,7 +65,7 @@ func (s *SOCKS5Server) Run() error {
 		// Go
 		go func() {
 			defer conn.Close()
-			err := handleConnection(conn)
+			err := handleConnection(conn, s.Config)
 			if err != nil {
 				log.Printf("handle connection failure from %s: %s", conn.RemoteAddr(), err)
 			}
@@ -54,9 +73,9 @@ func (s *SOCKS5Server) Run() error {
 	}
 }
 
-func handleConnection(conn net.Conn) error {
+func handleConnection(conn io.ReadWriter, config *Config) error {
 	// 协商
-	if err := auth(conn); err != nil {
+	if err := auth(conn, config); err != nil {
 		return err
 	}
 	// 请求
@@ -71,15 +90,17 @@ func handleConnection(conn net.Conn) error {
 /**
 处理协商
 */
-func auth(conn net.Conn) error {
+func auth(conn io.ReadWriter, config *Config) error {
+	// Read client auth message
 	clientMessage, err := NewClientAuthMessage(conn)
 	if err != nil {
 		return err
 	}
-	// Only support no-auth
+	// Check if the auth method is supported
 	var accpetable bool
 	for _, method := range clientMessage.Methods {
-		if method == MethodNoAuth {
+		// 遍历比较 Client Method with Config.AuthMethod
+		if method == config.AuthMethod {
 			accpetable = true
 		}
 	}
@@ -88,7 +109,28 @@ func auth(conn net.Conn) error {
 		NewServerAuthMessage(conn, MethodNoAcceptable)
 		return ErrMethodNotSupport
 	}
-	return NewServerAuthMessage(conn, MethodNoAuth)
+	// return Client Auth Method Message
+	if err := NewServerAuthMessage(conn, config.AuthMethod); err != nil {
+		return err
+	}
+	// Auth Password Method
+	if config.AuthMethod == MethodPassword {
+		passwordMessage, err := NewClientPasswordMessage(conn)
+		if err != nil {
+			return err
+		}
+		if !config.PasswordChecker(passwordMessage.Username, passwordMessage.Password) {
+			// auth failed
+			WriteServerPasswordResponse(conn, PasswordAuthFailure)
+			return ErrPasswordAuthFailure
+		}
+		// auth success
+		err = WriteServerPasswordResponse(conn, PasswordAuthSuccess)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 /**

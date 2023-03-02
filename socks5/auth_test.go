@@ -46,3 +46,24 @@ func TestNewServerAuthMessage(t *testing.T) {
 		}
 	})
 }
+
+func TestNewClientPasswordMessage(t *testing.T) {
+	t.Run("valid password auth message", func(t *testing.T) {
+		username, password := "admin", "123"
+		buf := bytes.Buffer{}
+		buf.Write([]byte{PasswordMethodVersion, 5})
+		buf.WriteString(username)
+		buf.WriteByte(3)
+		buf.WriteString(password)
+		message, err := NewClientPasswordMessage(&buf)
+		if err != nil {
+			t.Fatalf("want error = nil, but got %s", err)
+		}
+		want := ClientPassWordMessage{
+			username, password,
+		}
+		if *message != want {
+			t.Fatalf("want message %v but got %v", *message, want)
+		}
+	})
+}
