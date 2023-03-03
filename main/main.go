@@ -9,23 +9,26 @@ import (
 )
 
 func main() {
-	serverUsername := "asdpg612897a.*.."
-	serverPassword := "sdamzs029123//.."
-	serverPort := 1080
+	serverUsername := "admin"
+	serverPassword := "admin"
+	serverAddress := "localhost"
+	serverPort := 11451
 	if len(os.Args) > 3 {
-		fmt.Println("your username is", os.Args[1])
-		fmt.Println("your password is", os.Args[2])
-		fmt.Println("your server port is", os.Args[3])
 		serverUsername = os.Args[1]
 		serverPassword = os.Args[2]
 		result, err := strconv.Atoi(os.Args[3])
+		serverAddress = os.Args[4]
 		if err == nil {
 			serverPort = result
 		}
 	}
 
+	fmt.Println("your username is", serverUsername)
+	fmt.Println("your password is", serverPassword)
+	fmt.Println("your server port is", serverPort)
+
 	server := socks5.SOCKS5Server{
-		IP:   "localhost",
+		IP:   serverAddress,
 		Port: serverPort,
 		Config: &socks5.Config{
 			AuthMethod: socks5.MethodPassword,

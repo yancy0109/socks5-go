@@ -51,12 +51,14 @@ func (s *SOCKS5Server) Run() error {
 		return err
 	}
 	address := fmt.Sprintf("%s:%d", s.IP, s.Port)
+	log.Printf("try to listen %s", address)
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
 	for {
 		conn, err := listener.Accept()
+		log.Printf("Connection start")
 		if err != nil {
 			log.Printf("Connection failure from %s: %s ", conn.RemoteAddr(), err)
 			continue
@@ -65,6 +67,7 @@ func (s *SOCKS5Server) Run() error {
 		// Go
 		go func() {
 			defer conn.Close()
+			log.Printf("Handle Connection")
 			err := handleConnection(conn, s.Config)
 			if err != nil {
 				log.Printf("handle connection failure from %s: %s", conn.RemoteAddr(), err)
@@ -153,8 +156,8 @@ func request(conn io.ReadWriter) (io.ReadWriteCloser, error) {
 	}
 
 	// 请求访问目标TCP服务
-	addrees := fmt.Sprintf("%s:%d", message.Address, message.Port)
-	targetConn, err := net.Dial("tcp", addrees)
+	address := fmt.Sprintf("%s:%d", message.Address, message.Port)
+	targetConn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, WriteRequestFailureMessage(conn, ReplyConnectionRefusd)
 	}
